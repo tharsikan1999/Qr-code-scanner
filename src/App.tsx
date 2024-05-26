@@ -1,9 +1,12 @@
-import React, { useState, ChangeEvent, FormEvent } from "react";
+import { useState, ChangeEvent, FormEvent } from "react";
+import "./App.css";
+import { QrReader } from "react-qr-reader";
 import * as XLSX from "xlsx";
-import "./App.css"; // Import the CSS file
+import { saveAs } from "file-saver";
 
 function App() {
   const [inputs, setInputs] = useState({
+    hu_code: "",
     date: "",
     material: "",
     spaBatch: "",
@@ -17,38 +20,126 @@ function App() {
     notes: "",
   });
 
-  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [formHistory, setFormHistory] = useState<any[]>([]); // Array to store form data history
 
   const handleChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
-    setInputs((prev) => ({
-      ...prev,
+    const { name, value } = event.target;
+    setInputs({
+      ...inputs,
       [name]: value,
-    }));
+    });
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const [showQr, setShowQr] = useState(false);
 
-    setSubmissions((prevSubmissions) => {
-      const newSubmissions = [...prevSubmissions, inputs];
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    console.log(inputs);
 
-      const worksheet = XLSX.utils.json_to_sheet(newSubmissions);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+    // Add current inputs to form history
+    setFormHistory([...formHistory, inputs]);
 
-      XLSX.writeFile(workbook, "form_data.xlsx");
+    // Generate and download Excel file
+    convertToExcel();
 
-      return newSubmissions;
+    // You can add more logic here to handle form submission, such as API calls
+  };
+
+  const handleRefresh = () => {
+    setInputs({
+      hu_code: "",
+      date: "",
+      material: "",
+      spaBatch: "",
+      supplierBatch: "",
+      qty: "",
+      location: "",
+      startWidth: "",
+      middleWidth: "",
+      endWidth: "",
+      length: "",
+      notes: "",
     });
+  };
+
+  const handleShowqr = () => {
+    setShowQr(!showQr);
+  };
+
+  // Function to convert input data to XLSX format
+  const convertToExcel = () => {
+    // Combine current inputs with form history
+    const allFormData = [...formHistory, inputs];
+
+    // Convert inputs to a suitable format for XLSX
+    const data = allFormData.map((formData, index) => ({
+      ...formData,
+      // Add a sequence number for reference if needed
+      seq: index + 1,
+    }));
+
+    // Define worksheet
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // Define workbook and add the worksheet
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+    // Generate Excel file and download it using FileSaver
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary" });
+    const fileName = "form-data.xlsx";
+    const blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
+
+    saveAs(blob, fileName);
+  };
+
+  // Function to convert string to array buffer
+  const s2ab = (s: string) => {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i !== s.length; ++i) view[i] = s.charCodeAt(i) & 0xff;
+    return buf;
   };
 
   return (
     <>
+      {showQr && (
+        <div className="qr-reader-container">
+          <QrReader
+            onResult={(result, error) => {
+              if (result) {
+                setInputs(JSON.parse(result.text));
+              }
+
+              if (error) {
+                console.error(error);
+              }
+            }}
+          />
+        </div>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div>
+          <input
+            type="text"
+            name="hu_code"
+            value={inputs.hu_code}
+            onChange={handleChange}
+            placeholder="Hu code"
+          />
+          <div className="button-box">
+            <button type="button" onClick={handleShowqr}>
+              {showQr ? "Hide Scanner" : "Show Scanner"}
+            </button>
+            <button type="button" className="button1" onClick={handleRefresh}>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <div className="form-row">
           <input
             type="date"
             name="date"
